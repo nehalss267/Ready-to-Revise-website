@@ -1,427 +1,336 @@
-import React from "react";
+"use client";
 
-// Minimal cn that joins classname strings, filtering falsy values.
-export function cn(...classes: (string | undefined | null)[]): string {
-  return classes.filter((c) => c && typeof c === "string").join(" ");
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useId,
+  useState,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+} from "react";
+import Link from "next/link";
+import {
+  Brain,
+  CircleAlert,
+  CircleCheck,
+  Eye,
+  EyeOff,
+  Info,
+  LoaderCircle,
+} from "lucide-react";
+
+export function cn(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
 }
 
-/* ---------------- Button ---------------- */
+/* ---------------------------------- Logo ---------------------------------- */
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "outline" | "danger";
-  size?: "sm" | "md" | "lg";
+export function Logo({
+  className,
+  href = "/",
+}: {
+  className?: string;
+  href?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "inline-flex items-center gap-2.5 font-semibold tracking-tight text-slate-900",
+        className,
+      )}
+    >
+      <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-soft">
+        <Brain className="size-5" strokeWidth={2.2} />
+      </span>
+      <span className="text-lg">
+        Ready<span className="text-brand-600">To</span>Revise
+      </span>
+    </Link>
+  );
+}
+
+/* --------------------------------- Spinner -------------------------------- */
+
+export function Spinner({ className }: { className?: string }) {
+  return (
+    <LoaderCircle className={cn("size-4 animate-spin", className)} strokeWidth={2.4} />
+  );
+}
+
+/* --------------------------------- Button --------------------------------- */
+
+type ButtonVariant = "primary" | "secondary" | "outline" | "ghost";
+type ButtonSize = "sm" | "md" | "lg";
+
+const buttonVariants: Record<ButtonVariant, string> = {
+  primary:
+    "bg-brand-600 text-white shadow-soft hover:bg-brand-700 focus-visible:outline-brand-600 disabled:bg-brand-400",
+  secondary:
+    "bg-slate-900 text-white shadow-soft hover:bg-slate-800 focus-visible:outline-slate-900",
+  outline:
+    "border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-slate-400",
+  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-slate-400",
+};
+
+const buttonSizes: Record<ButtonSize, string> = {
+  sm: "h-8 gap-1.5 rounded-lg px-3 text-sm",
+  md: "h-10 gap-2 rounded-xl px-4 text-sm",
+  lg: "h-12 gap-2 rounded-xl px-6 text-base",
+};
+
+export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   loading?: boolean;
-  loadingText?: string;
-}
+};
 
 export function Button({
-  children,
-  onClick,
   variant = "primary",
   size = "md",
   loading = false,
-  loadingText = "Loading",
   disabled,
   className,
-  ...rest
+  children,
+  ...props
 }: ButtonProps) {
-  const baseClasses = cn(
-    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none",
-    variant === "primary"
-      ? "bg-brand text-white hover:bg-brand-dark active:bg-brand-deep"
-      : variant === "secondary"
-      ? "bg-surface text-foreground hover:bg-muted active:bg-muted/80"
-      : variant === "outline"
-      ? "border border-brand text-brand hover:bg-brand/5 active:bg-brand/10"
-      : variant === "danger"
-      ? "bg-danger text-white hover:bg-danger/90 active:bg-danger/95"
-      : "",
-    size === "sm"
-      ? "h-9 px-3 text-sm rounded-md"
-      : size === "lg"
-      ? "h-11 px-8 text-lg rounded-md"
-      : "h-10 px-6 text-base rounded-md",
-    "shadow-sm"
-  );
-
-  if (loading) {
-    return (
-      <button
-        onClick={onClick}
-        disabled={disabled || loading}
-        className={cn(baseClasses, "flex items-center justify-center gap-2")}
-        {...rest}
-      >
-        <svg
-          className="animate-spin h-4 w-4"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-0"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.14V21.25a.75.75 0 001.5 0l3-2.14c1.865-1.114 3-3.896 3-7.938 0-2.133-.875-3.855-3-5.291z"
-          />
-        </svg>
-        <span>{loadingText}</span>
-      </button>
-    );
-  }
-
   return (
     <button
-      onClick={onClick}
       disabled={disabled || loading}
-      className={cn(baseClasses, "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2")}
-      {...rest}
+      className={buttonClasses(variant, size, className)}
+      {...props}
     >
+      {loading && <Spinner />}
       {children}
     </button>
   );
 }
 
-/* ---------------- Card ---------------- */
+const buttonClasses = (
+  variant: ButtonVariant,
+  size: ButtonSize,
+  className?: string,
+) =>
+  cn(
+    "inline-flex select-none items-center justify-center font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-70",
+    buttonVariants[variant],
+    buttonSizes[size],
+    className,
+  );
 
-export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+export type ButtonLinkProps = {
+  href: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
   className?: string;
-  shadow?: "soft" | "deep";
+  children: ReactNode;
+};
+
+export function ButtonLink({
+  href,
+  variant = "primary",
+  size = "md",
+  className,
+  children,
+}: ButtonLinkProps) {
+  return (
+    <Link href={href} className={buttonClasses(variant, size, className)}>
+      {children}
+    </Link>
+  );
 }
+
+/* ---------------------------- Field primitives ---------------------------- */
+
+type FieldContextValue = { id: string; describedBy?: string; invalid?: boolean };
+const FieldContext = createContext<FieldContextValue | null>(null);
+
+export function Field({
+  label,
+  error,
+  hint,
+  children,
+}: {
+  label?: string;
+  error?: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  const id = useId();
+  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+  return (
+    <FieldContext.Provider value={{ id, describedBy, invalid: !!error }}>
+      <label className="block" htmlFor={id}>
+        {label && (
+          <span className="mb-1.5 block text-sm font-medium text-slate-700">
+            {label}
+          </span>
+        )}
+        {children}
+        {error ? (
+          <span id={describedBy} className="mt-1.5 flex items-center gap-1 text-xs text-red-600">
+            <CircleAlert className="size-3.5" /> {error}
+          </span>
+        ) : hint ? (
+          <span id={describedBy} className="mt-1.5 block text-xs text-slate-500">
+            {hint}
+          </span>
+        ) : null}
+      </label>
+    </FieldContext.Provider>
+  );
+}
+
+const baseInput =
+  "w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition-colors focus:outline-2 focus:-outline-offset-2 disabled:cursor-not-allowed disabled:bg-slate-50";
+
+export function Input({
+  className,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
+  const field = useContext(FieldContext);
+  return (
+    <input
+      id={field?.id}
+      aria-describedby={field?.describedBy}
+      aria-invalid={field?.invalid || props["aria-invalid"]}
+      className={cn(
+        baseInput,
+        field?.invalid
+          ? "border-red-300 focus:outline-red-500"
+          : "border-slate-200 focus:outline-brand-500 hover:border-slate-300",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function PasswordInput({
+  className,
+  ...props
+}: InputHTMLAttributes<HTMLInputElement>) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="relative">
+      <Input type={visible ? "text" : "password"} className={cn("pr-10", className)} {...props} />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Hide password" : "Show password"}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 transition-colors hover:text-slate-600"
+      >
+        {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
+    </div>
+  );
+}
+
+/* ---------------------------------- Alert --------------------------------- */
+
+type AlertVariant = "error" | "success" | "info";
+
+const alertVariants: Record<AlertVariant, string> = {
+  error: "border-red-200 bg-red-50 text-red-700",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  info: "border-brand-200 bg-brand-50 text-brand-800",
+};
+
+const alertIcons: Record<AlertVariant, ReactNode> = {
+  error: <CircleAlert className="size-4 shrink-0" />,
+  success: <CircleCheck className="size-4 shrink-0" />,
+  info: <Info className="size-4 shrink-0" />,
+};
+
+export function Alert({
+  variant = "info",
+  children,
+  className,
+}: {
+  variant?: AlertVariant;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-sm",
+        alertVariants[variant],
+        className,
+      )}
+    >
+      {alertIcons[variant]}
+      <span className="leading-snug">{children}</span>
+    </div>
+  );
+}
+
+/* ---------------------------------- Card ---------------------------------- */
 
 export function Card({
-  children,
-  shadow = "soft",
   className,
-  ...rest
-}: CardProps) {
-  const shadowClass = cn(
-    shadow === "soft" ? "shadow-soft" : "shadow-deep",
-    "rounded-2xl"
-  );
-
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
   return (
     <div
-      className={cn("background-white dark:bg-surface shadow-card", shadowClass, className)}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* ---------------- Input Field ---------------- */
-
-export interface InputFieldProps extends React.LabelHTMLAttributes<HTMLInputElement> {
-  type?: string;
-  placeholder?: string;
-  error?: string;
-  className?: string;
-}
-
-export function InputField({
-  label,
-  ...rest
-}: Omit<InputFieldProps, "label"> & { label: string }) {
-  return (
-    <div className="space-y-1.5">
-      <label
-        className="block text-sm font-medium mb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      >
-        {label}
-      </label>
-      <input
-        {...rest}
-        className={cn(
-          "w-full rounded-md border border-border px-3 py-2 text-sm shadow-sm placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        )}
-        {...rest}
-      />
-      {rest.error && (
-        <p className="text-sm text-danger">{rest.error}</p>
-      )}
-    </div>
-  );
-}
-
-/* ---------------- Badge ---------------- */
-
-export function Badge({
-  children,
-  variant = "secondary",
-  className,
-}: { children: React.ReactNode; variant?: "secondary" | "danger" | "success"; className?: string }) {
-  const variants = {
-    secondary: "bg-muted text-foreground",
-    danger: "bg-danger/10 text-danger border border-danger",
-    success: "bg-success/10 text-success border border-success",
-  };
-
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", variants[variant], className)}>
-      {children}
-    </span>
-  );
-}
-
-/* ---------------- Status Chip ---------------- */
-
-export function StatusChip({
-  status,
-  className,
-}: { status: "UPLOADED" | "ANALYZING" | "READY" | "FAILED"; className?: string }) {
-  const statuses = {
-    UPLOADED: { bg: "bg-brand/5", text: "Brand", border: "border-brand" },
-    ANALYZING: { bg: "bg-muted/5", text: "Muted", border: "border-muted" },
-    READY: { bg: "bg-success/5", text: "Success", border: "border-success" },
-    FAILED: { bg: "bg-danger/5", text: "Danger", border: "border-danger" },
-  };
-
-  const s = statuses[status] || statuses.UPLOADED;
-
-  return (
-    <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        `bg-${s.bg} text-${s.text} border-${s.border}`
+        "rounded-2xl border border-slate-200/80 bg-white shadow-soft",
+        className,
       )}
     >
-      {status}
-    </span>
+      {children}
+    </div>
   );
 }
 
-/* ---------------- Spinner ---------------- */
+/* -------------------------------- AuthShell ------------------------------- */
 
-export function Spinner({
-  className,
-  size = "sm",
-}: { className?: string; size?: "sm" | "md" }) {
-  const sizeMap = { sm: "h-4 w-4", md: "h-6 w-6" };
-  return (
-    <svg
-      className={cn("animate-spin", sizeMap[size], className)}
-      viewBox="0 0 24 24"
-    >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-0"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.14V21.25a.75.75 0 001.5 0l3-2.14c1.865-1.114 3-3.896 3-7.938 0-2.133-.875-3.855-3-5.291z"
-      />
-    </svg>
-  );
-}
-
-/* ---------------- EmptyState ---------------- */
-
-export function EmptyState({
-  icon,
+export function AuthShell({
   title,
-  message,
-  actionLabel,
-  onAction,
-  className,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  message: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  className?: string;
-}) {
-  return (
-    <div className={cn("text-center py-16 text-muted", className)}>
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-lg font-medium mb-1">{title}</h3>
-      <p className="text-sm">{message}</p>
-      {actionLabel && onAction && (
-        <Button onClick={onAction} className="mt-4">
-          {actionLabel}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-/* ---------------- StatTile ---------------- */
-
-export function StatTile({
-  label,
-  value,
   subtitle,
-  icon,
-  action,
-  actionLabel,
-  className,
+  children,
+  footer,
 }: {
-  label: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ReactNode;
-  action?: () => void;
-  actionLabel?: string;
-  className?: string;
+  title: string;
+  subtitle: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
 }) {
   return (
-    <div className={cn("p-6 rounded-2xl border border-border transition-colors hover:border-brand/20", className)}>
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            {icon}
-            <span className="text-sm font-medium">{label}</span>
+    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-slate-50 px-4 py-12">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-96 bg-gradient-to-b from-brand-100/70 to-transparent"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 size-[36rem] -translate-x-1/2 rounded-full bg-gradient-to-br from-brand-200/50 via-transparent to-transparent blur-3xl"
+      />
+
+      <div className="relative w-full max-w-md animate-fade-up">
+        <div className="mb-8 flex flex-col items-center gap-6">
+          <Logo />
+          <div className="text-center">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+              {title}
+            </h1>
+            <p className="mt-1.5 text-sm text-slate-500">{subtitle}</p>
           </div>
-          {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
         </div>
-        <div className="text-right">
-          <p className="text-xl font-medium">{value}</p>
-        </div>
+
+        <Card className="p-6 sm:p-8">{children}</Card>
+
+        {footer && (
+          <div className="mt-6 text-center text-sm text-slate-500">{footer}</div>
+        )}
       </div>
-      {action && (
-        <Button
-          onClick={action}
-          variant="outline"
-          size="sm"
-          className="mt-3"
-        >
-          {actionLabel || "View"}
-        </Button>
-      )}
-    </div>
-  );
-}
-
-/* ---------------- useConfirm ---------------- */
-
-export function useConfirm(
-  text: string,
-  onConfirm: () => void,
-  onCancel?: () => void,
-) {
-  const confirmed = React.useRef(false);
-
-  React.useEffect(() => {
-    if (confirmed.current) {
-      const result = window.confirm(text);
-      if (result) {
-        onConfirm();
-      } else if (onCancel) {
-        onCancel();
-      }
-      confirmed.current = false;
-    }
-  }, [onConfirm, onCancel]);
-
-  return {
-    confirm: () => {
-      confirmed.current = true;
-    },
-  };
-}
-
-/* ---------------- Toast ---------------- */
-
-let toastIdCounter = 0;
-
-export interface Toast {
-  id: string;
-  title: string;
-  description?: string;
-  variant?: "default" | "destructive";
-  duration?: number;
-}
-
-export function useToast() {
-  const [toasts, setToasts] = React.useState<Toast[]>([]);
-
-  React.useEffect(() => {
-    const handler = (e: MessageEvent) => {
-      const data = e.data;
-      if (typeof data === "object" && data.type === "toast") {
-        setToasts((prev) => {
-          const index = prev.findIndex((t) => t.id === data.id);
-          if (index >= 0) {
-            return prev.filter((_, i) => i !== index);
-          }
-          return [...prev, data];
-        });
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, []);
-
-  const toast = React.useCallback(
-    (options: Omit<Toast, "id"> & { duration?: number }) => {
-      const id = `${++toastIdCounter}_${Date.now()}`;
-      const toast: Toast = {
-        id,
-        title: options.title,
-        description: options.description,
-        variant: options.variant,
-        duration: options.duration ?? 5000,
-      };
-      setToasts((prev) => [...prev, toast]);
-
-      const timer = setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, toast.duration!);
-
-      return () => clearTimeout(timer);
-    },
-    [setToasts],
-  );
-
-  const dismiss = React.useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, [setToasts]);
-
-  return { toasts, toast, dismiss };
-}
-
-/* ---------------- ToastProvider ---------------- */
-
-export function ToastProvider({
-  children,
-}: { children: React.ReactNode }) {
-  const { toasts, dismiss } = useToast();
-
-  if (toasts.length === 0) return null;
-
-  return (
-    <div
-      className="fixed bottom-4 right-4 z-50 space-y-2"
-    >
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={cn(
-            "background-surface border border-rounded-xl p-4 shadow-soft max-w-md flex items-start gap-3 opacity-0 animate-in fade-up-0",
-            "data-[state=closed]:animate-out fade-out-0"
-          )}
-        >
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-foreground">{toast.title}</h3>
-            {toast.description && (
-              <p className="mt-1 text-sm text-muted/80 line-clamp-2">
-                {toast.description}
-              </p>
-            )}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

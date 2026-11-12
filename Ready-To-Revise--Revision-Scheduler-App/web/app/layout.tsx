@@ -1,28 +1,27 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-geist-sans",
+});
 
 export const metadata: Metadata = {
   title: {
-    default: "Ready-To-Revise — Revise smarter, remember more",
-    template: "%s — Ready-To-Revise",
+    default: "ReadyToRevise — Smart Revision Scheduler",
+    template: "%s · ReadyToRevise",
   },
   description:
-    "Behavior-driven spaced repetition that adapts to how you actually perform. Upload materials, revise with smart MCQ sessions, and track recall.",
-};
-
-export const viewport: Viewport = {
-  themeColor: "#064663",
-  width: "device-width",
-  initialScale: 1,
+    "Upload your study materials, get AI-generated questions, and remember more with behavior-driven spaced repetition.",
 };
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">{children}</body>
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-dvh font-sans">{children}</body>
     </html>
   );
 }
