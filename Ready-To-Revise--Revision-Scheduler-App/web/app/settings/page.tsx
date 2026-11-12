@@ -300,7 +300,7 @@ export default function SettingsPage() {
                 <dt className="text-slate-500">Source</dt>
                 <dd className="font-medium text-slate-800">
                   <a
-                    href="https://github.com/nehalss267/Ready-To-Revise--Revision-Scheduler-App"
+                    href="https://github.com/nehalss267/Ready-to-Revise-website.git"
                     target="_blank"
                     rel="noreferrer"
                     className="text-brand-600 hover:text-brand-700"
