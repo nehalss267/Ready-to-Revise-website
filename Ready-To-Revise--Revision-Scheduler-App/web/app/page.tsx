@@ -108,9 +108,9 @@ export default function LandingPage() {
               size="lg"
               variant="outline"
               className="w-full sm:w-auto"
-              href="/login"
+              href="/dashboard"
             >
-              Log in
+              Try it as a guest
             </ButtonLink>
           </div>
 
@@ -205,11 +205,14 @@ export default function LandingPage() {
           Ready to revise?
         </h2>
         <p className="mx-auto mt-3 max-w-md text-slate-500">
-          Create a free account and never cram the night before again.
+          Create a free account — or just start as a guest, no signup needed.
         </p>
-        <div className="mt-8">
+        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <ButtonLink size="lg" href="/register">
             Create your free account
+          </ButtonLink>
+          <ButtonLink size="lg" variant="outline" href="/dashboard">
+            Try as guest
           </ButtonLink>
         </div>
       </section>

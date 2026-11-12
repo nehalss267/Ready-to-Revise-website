@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiPostJson } from "@/lib/api";
+import { migrateLocalItemsToAccount } from "@/lib/migrate";
 import {
   Alert,
   AuthShell,
@@ -30,6 +31,8 @@ export default function LoginPage() {
         password,
       });
       localStorage.setItem("r2r_token", accessToken);
+      // Carry guest items into the account (best effort, non-blocking failures)
+      await migrateLocalItemsToAccount().catch(() => null);
       router.push("/dashboard");
     } catch (e: any) {
       setError(e.message || "Login failed. Please check your credentials.");

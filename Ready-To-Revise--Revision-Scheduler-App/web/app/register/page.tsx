@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiPostJson } from "@/lib/api";
+import { migrateLocalItemsToAccount } from "@/lib/migrate";
 import {
   Alert,
   AuthShell,
@@ -38,6 +39,8 @@ export default function RegisterPage() {
       });
       localStorage.setItem("r2r_token", accessToken);
       localStorage.setItem("r2r_name", name.trim());
+      // Carry guest items into the new account (best effort, non-blocking failures)
+      await migrateLocalItemsToAccount().catch(() => null);
       router.push("/dashboard");
     } catch (e: any) {
       setError(e.message || "Registration failed. Please try again.");
