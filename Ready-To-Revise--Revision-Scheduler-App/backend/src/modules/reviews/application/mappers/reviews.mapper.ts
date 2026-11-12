@@ -1,0 +1,24 @@
+import { Review } from '@prisma/client';
+import { ReviewResponseDto } from '../../presentation/dto/review-response.dto';
+
+export class ReviewsMapper {
+    static toResponse(review: Review): ReviewResponseDto {
+        return {
+            id: review.id,
+            studyItemId: review.studyItemId,
+            result: review.result,
+            intervalDays: review.intervalDays,
+            reviewedAt: review.reviewedAt,
+            nextReviewAt: review.nextReviewAt,
+            isCorrect: review.isCorrect ?? undefined,
+            confidenceScore: review.confidenceScore ?? undefined,
+            recallProbability: review.recallProbability ?? undefined,
+            fsrsState: review.fsrsState ?? undefined,
+            fsrsStep: review.fsrsStep ?? undefined,
+            fsrsStability: review.fsrsStability ?? undefined,
+            fsrsDifficulty: review.fsrsDifficulty ?? undefined,
+            createdAt: review.createdAt,
+            updatedAt: review.updatedAt,
+        };
+    }
+}

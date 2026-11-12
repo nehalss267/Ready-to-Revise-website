@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:17
+
+    container_name: r2r-postgres
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-r2r_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-r2r_password}
+      POSTGRES_DB: ${POSTGRES_DB:-r2r_db}
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-r2r_user} -d ${POSTGRES_DB:-r2r_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ml:
+    build:
+      context: ./machine_learning
+
+    container_name: r2r-ml
+
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:${ML_PORT:-8000}:8000"
+
+  backend:
+    build:
+      context: ./backend
+
+    container_name: r2r-backend
+
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      ml:
+        condition: service_started
+
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-r2r_user}:${POSTGRES_PASSWORD:-r2r_password}@postgres:5432/${POSTGRES_DB:-r2r_db}?schema=public
+
+      JWT_SECRET: ${JWT_SECRET:-change-me-dev-secret}
+
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+
+      ML_SERVICE_URL: http://ml:8000
+
+      ML_MODEL_NAME: ${ML_MODEL_NAME:-calibrated_best}
+
+      ML_TIMEOUT_MS: ${ML_TIMEOUT_MS:-2000}
+
+      ML_FAILURE_COOLDOWN_MS: ${ML_FAILURE_COOLDOWN_MS:-30000}
+
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+
+      UPLOAD_DIRECTORY: ${UPLOAD_DIRECTORY:-/app/uploads}
+
+      RECOMMENDATION_DAILY_CAP: ${RECOMMENDATION_DAILY_CAP:-20}
+
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_SENDER_EMAIL: ${BREVO_SENDER_EMAIL:-}
+      BREVO_SENDER_NAME: ${BREVO_SENDER_NAME:-Ready to Revise}
+
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

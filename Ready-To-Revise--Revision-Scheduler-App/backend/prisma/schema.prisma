@@ -1,0 +1,250 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum StudyItemType {
+  QUESTION
+  NOTE
+  FORMULA
+  FLASHCARD
+}
+
+enum ReviewResult {
+  EASY
+  GOOD
+  HARD
+  AGAIN
+  MEMORIZED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum DocumentStatus {
+  UPLOADED
+  ANALYZING
+  READY
+  FAILED
+}
+
+model Subject {
+  id String @id @default(uuid())
+
+  name String @unique
+
+  chapters Chapter[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Chapter {
+  id   String @id @default(uuid())
+  name String
+
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  topics Topic[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subjectId, name])
+  @@index([subjectId])
+}
+
+model Topic {
+  id   String @id @default(uuid())
+  name String
+
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  studyItems StudyItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([chapterId, name])
+  @@index([chapterId])
+}
+
+model StudyItem {
+  id String @id @default(uuid())
+
+  title   String?
+  content String?
+
+  type       StudyItemType
+  difficulty Difficulty?
+
+  options            Json?
+  correctAnswerIndex Int?
+
+  origin           String?
+
+  mediaDocumentId String?
+
+  nextReviewAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  topicId String?
+  topic   Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  attachments Attachment[]
+  reviews     Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([topicId])
+  @@index([type, nextReviewAt])
+}
+
+model Review {
+  id String @id @default(uuid())
+
+  studyItemId String
+  studyItem   StudyItem @relation(fields: [studyItemId], references: [id], onDelete: Cascade)
+
+  result       ReviewResult
+  intervalDays Float
+  reviewedAt   DateTime     @default(now())
+
+  nextReviewAt DateTime
+
+  recallProbability Float?
+  fsrsState       Int?
+  fsrsStep        Int?
+  fsrsStability   Float?
+  fsrsDifficulty  Float?
+
+  selectedOptionIndex Int?
+  isCorrect           Boolean?
+  confidenceScore     Float?
+
+  responseTimeMs Int?
+  hesitationMs   Int?
+  answerChanges  Int?
+  sessionId      String?
+
+  sessionDurationMinutes   Int?
+  questionPositionInSession Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studyItemId])
+  @@index([nextReviewAt])
+  @@index([sessionId])
+}
+
+model Attachment {
+  id String @id @default(uuid())
+
+  url      String
+  storageProvider String?
+  mimeType String?
+  fileSize Int?
+
+  studyItemId String
+  studyItem   StudyItem @relation(fields: [studyItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studyItemId])
+}
+
+model User {
+  id           String @id @default(uuid())
+  name         String
+  email        String @unique
+  passwordHash String
+
+  studyItems StudyItem[]
+  documents Document[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PasswordResetOtp {
+  id        String    @id @default(uuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
+model Document {
+  id String @id @default(cuid())
+
+  userId String
+  user User @relation( fields: [userId], references: [id], onDelete: Cascade)
+
+  title String?
+
+  originalName String
+  mimeType String
+
+  status DocumentStatus
+
+  storageKey String?
+
+  metadata DocumentMetadata?
+
+  fileSize Int?
+
+  checksum String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model DocumentMetadata {
+  documentId String @id
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  summary String
+
+  subject String
+
+  chapter String
+
+  topic String
+
+  difficulty Difficulty
+
+  keywords Json
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}

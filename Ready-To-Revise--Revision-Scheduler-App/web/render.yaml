@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: r2r-web
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Backend API base URL
+      - key: NEXT_PUBLIC_API_URL
+        value: https://r2r-backend.onrender.com/api/v1
+
+      # Gemini AI
+      - key: GEMINI_API_KEY
+        sync: false
+
+      # Optional: custom domain
+      # - domain: r2r.yourdomain.com
+
+  # Optional: managed PostgreSQL (uncomment if using Render Postgres)
+  # databases:
+  #   - name: r2r-db
+  #     plan: starter

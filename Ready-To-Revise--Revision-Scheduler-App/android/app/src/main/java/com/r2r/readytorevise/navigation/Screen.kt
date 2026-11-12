@@ -1,0 +1,35 @@
+package com.r2r.readytorevise.navigation
+
+sealed class Screen(val route: String) {
+
+    data object Login : Screen("login")
+
+    data object Register : Screen("register")
+
+    data object ForgotPassword : Screen("forgot_password")
+
+    data object Dashboard : Screen("dashboard")
+
+    data object Upload : Screen("upload")
+    data object Preview : Screen("preview")
+    data object Processing : Screen("processing")
+
+    data object DocumentPreview : Screen("document_preview")
+
+    data object Revision : Screen("revision")
+
+    data object Analytics : Screen("analytics")
+
+    data object Profile : Screen("profile")
+
+    data object NotificationSettings : Screen("notification_settings")
+
+    data object Settings : Screen("settings")
+
+    data object ChangePassword : Screen("change_password")
+
+    data object UploadSuccess : Screen("upload_success")
+
+    data object Onboarding : Screen("onboarding")
+
+}
