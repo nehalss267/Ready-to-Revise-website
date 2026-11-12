@@ -7,6 +7,7 @@ import {
   ChartColumn,
   CircleCheck,
   Flame,
+  FileUp,
   Layers,
   Play,
   Plus,
@@ -138,11 +139,15 @@ export default function DashboardPage() {
               variant={showForm ? "outline" : "secondary"}
               onClick={() => setShowForm((v) => !v)}
               disabled={isAuthedMode}
-              title={isAuthedMode ? "Adding items requires uploading documents (coming to web)" : undefined}
+              title={isAuthedMode ? "Use Upload to add material with AI questions" : undefined}
             >
               <Plus className="size-4" />
               Add item
             </Button>
+            <ButtonLink href="/upload" variant="outline">
+              <FileUp className="size-4" />
+              Upload
+            </ButtonLink>
             <ButtonLink href="/review">
               <Play className="size-4" />
               Start revision
@@ -240,8 +245,11 @@ export default function DashboardPage() {
             ) : (
               <div className="px-5 py-8 text-center">
                 <p className="text-sm text-slate-500">
-                  Your questions live in uploaded documents. Browse and revise
-                  them from the recommendation queue.
+                  Your questions come from uploaded documents.{" "}
+                  <Link href="/upload" className="font-medium text-brand-600 hover:text-brand-700">
+                    Upload a file
+                  </Link>{" "}
+                  to generate AI questions, then revise them from the queue.
                 </p>
               </div>
             )}
@@ -270,10 +278,13 @@ export default function DashboardPage() {
             )}
 
             <div className="border-t border-slate-100 px-5 py-4">
-              <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Link
+                href="/analytics"
+                className="inline-flex items-center gap-2 text-xs font-medium text-brand-600 hover:text-brand-700"
+              >
                 <ChartColumn className="size-3.5" />
-                Analytics deep-dive coming soon
-              </div>
+                View analytics
+              </Link>
             </div>
           </Card>
         </div>

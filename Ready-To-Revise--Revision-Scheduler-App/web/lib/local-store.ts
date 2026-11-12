@@ -126,6 +126,23 @@ export function getDueItems(): StudyItem[] {
     );
 }
 
+export function getSessionItems(): StudyItem[] {
+  const endOfToday = endOfTodayMs();
+  return listItems()
+    .filter((i) => {
+      if (!i.nextReviewAt) {
+        // New flashcards/notes enter their first session immediately
+        return i.type === "FLASHCARD" || i.type === "NOTE";
+      }
+      return new Date(i.nextReviewAt).getTime() <= endOfToday;
+    })
+    .sort((a, b) => {
+      const aDue = a.nextReviewAt ? new Date(a.nextReviewAt).getTime() : Infinity;
+      const bDue = b.nextReviewAt ? new Date(b.nextReviewAt).getTime() : Infinity;
+      return aDue - bDue;
+    });
+}
+
 export function getDashboardStats(): DashboardStats {
   const items = listItems();
   const reviews = listReviews();

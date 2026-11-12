@@ -8,7 +8,10 @@ import { cn, Logo } from "@/components/ui";
 
 const navLinks = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/upload", label: "Upload" },
   { href: "/review", label: "Revise" },
+  { href: "/analytics", label: "Analytics" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

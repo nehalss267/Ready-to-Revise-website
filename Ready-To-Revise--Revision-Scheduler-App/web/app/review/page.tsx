@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import {
   ArrowRight,
   CircleAlert,
   CircleCheck,
+  Pause,
+  Play,
   RotateCcw,
   Timer,
-  X,
 } from "lucide-react";
 import {
   Alert,
@@ -22,7 +28,7 @@ import { AppShell } from "@/components/app-shell";
 import { apiGet, apiPostJson } from "@/lib/api";
 import {
   getItem,
-  getDueItems,
+  getSessionItems,
   isAuthed,
   recordReview,
 } from "@/lib/local-store";
@@ -33,7 +39,18 @@ import type { ReviewResult } from "@/lib/types";
 interface QueueItem {
   id: string;
   title: string;
-  options: string[];
+  content: string | null;
+  options: string[] | null;
+  kind: "MCQ" | "CARD";
+}
+
+interface SessionResult {
+  item: QueueItem;
+  skipped?: boolean;
+  pick?: string;
+  correct?: string;
+  isCorrect?: boolean;
+  result?: ReviewResult;
 }
 
 interface Feedback {
@@ -45,6 +62,14 @@ interface Feedback {
 
 type Phase = "loading" | "empty" | "session" | "summary";
 
+const RESULT_META: Record<ReviewResult, { label: string; className: string }> = {
+  EASY: { label: "Easy", className: "bg-emerald-100 text-emerald-700" },
+  GOOD: { label: "Good", className: "bg-brand-100 text-brand-700" },
+  HARD: { label: "Hard", className: "bg-amber-100 text-amber-700" },
+  AGAIN: { label: "Again", className: "bg-red-100 text-red-600" },
+  MEMORIZED: { label: "Memorized", className: "bg-emerald-100 text-emerald-700" },
+};
+
 export default function ReviewPage() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [guest, setGuest] = useState(true);
@@ -52,51 +77,81 @@ export default function ReviewPage() {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [answerChanges, setAnswerChanges] = useState(0);
+  const [revealed, setRevealed] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<SessionResult[]>([]);
 
-  const [elapsed, setElapsed] = useState(0);
-  const [totalElapsed, setTotalElapsed] = useState(0);
-  const [results, setResults] = useState<Array<{ isCorrect?: boolean }>>([]);
+  // Session clock with pause support
+  const [paused, setPaused] = useState(false);
+  const [clockDisplay, setClockDisplay] = useState({ session: 0, question: 0 });
+  const clockRef = useRef({ sessionMs: 0, questionMs: 0, last: Date.now() });
+  const pausedRef = useRef(false);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
-  const questionStartRef = useRef<number>(0);
-  const sessionStartRef = useRef<number>(0);
+  useEffect(() => {
+    if (phase !== "session") return;
+    const t = setInterval(() => {
+      const now = Date.now();
+      if (!pausedRef.current) {
+        clockRef.current.sessionMs += now - clockRef.current.last;
+        clockRef.current.questionMs += now - clockRef.current.last;
+      }
+      clockRef.current.last = now;
+      setClockDisplay({
+        session: Math.floor(clockRef.current.sessionMs / 1000),
+        question: Math.floor(clockRef.current.questionMs / 1000),
+      });
+    }, 500);
+    return () => clearInterval(t);
+  }, [phase]);
 
   const loadQueue = useCallback(async () => {
     setError(null);
     if (!isAuthed()) {
       setGuest(true);
-      const due = getDueItems().map((item) => ({
+      const items = getSessionItems().map((item) => ({
         id: item.id,
         title: item.title ?? "",
-        options: item.options ?? [],
+        content: item.content ?? null,
+        options: item.options ?? null,
+        kind: item.options && item.options.length >= 2 && item.correctAnswerIndex !== undefined
+          ? ("MCQ" as const)
+          : ("CARD" as const),
       }));
-      if (due.length === 0) {
+      if (items.length === 0) {
         setPhase("empty");
         return;
       }
-      setQueue(due);
+      setQueue(items);
       startSession();
       return;
     }
 
     setGuest(false);
     try {
-      const data = await apiGet<{ source: string; items: Array<{
-        studyItemId: string;
-        title: string | null;
-        options: string[] | null;
-      }> }>(
+      const data = await apiGet<{
+        items: Array<{
+          studyItemId: string;
+          title: string | null;
+          options: string[] | null;
+        }>;
+      }>(
         `/recommendations?limit=20&dueBefore=${encodeURIComponent(dueBeforeISO())}`,
       );
-      const items = (data.items ?? [])
-        .filter((i) => i.options && i.options.length >= 2)
-        .map((i) => ({
-          id: i.studyItemId,
-          title: i.title ?? "",
-          options: i.options as string[],
-        }));
+      const items = (data.items ?? []).map((i) => ({
+        id: i.studyItemId,
+        title: i.title ?? "",
+        content: null,
+        options: i.options,
+        kind:
+          i.options && i.options.length >= 2
+            ? ("MCQ" as const)
+            : ("CARD" as const),
+      }));
 
       if (items.length === 0) {
         setPhase("empty");
@@ -114,11 +169,12 @@ export default function ReviewPage() {
     setIndex(0);
     setSelected(null);
     setAnswerChanges(0);
+    setRevealed(false);
     setFeedback(null);
     setResults([]);
-    setTotalElapsed(0);
-    sessionStartRef.current = Date.now();
-    questionStartRef.current = Date.now();
+    clockRef.current = { sessionMs: 0, questionMs: 0, last: Date.now() };
+    pausedRef.current = false;
+    setPaused(false);
     setPhase("session");
   }
 
@@ -126,30 +182,23 @@ export default function ReviewPage() {
     loadQueue();
   }, [loadQueue]);
 
-  useEffect(() => {
-    if (phase !== "session") return;
-    const t = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - questionStartRef.current) / 1000));
-    }, 500);
-    return () => clearInterval(t);
-  }, [phase, index]);
-
   const current = queue[index];
 
   const choose = (optionIndex: number) => {
-    if (feedback) return;
+    if (feedback || paused) return;
     if (selected !== null) setAnswerChanges((c) => c + 1);
     setSelected(optionIndex);
   };
 
   const check = async () => {
-    if (selected === null || !current || feedback) return;
+    if (selected === null || !current || feedback || paused) return;
     setSubmitting(true);
     setError(null);
 
+    const responseTimeMs = clockRef.current.questionMs;
     const observables: ConfidenceObservables = {
       isCorrect: false,
-      responseTimeMs: Date.now() - questionStartRef.current,
+      responseTimeMs,
       answerChanges,
     };
 
@@ -166,6 +215,16 @@ export default function ReviewPage() {
           correctIndex: item.correctAnswerIndex,
           nextInDays: record.intervalDays,
         });
+        setResults((prev) => [
+          ...prev,
+          {
+            item: current,
+            pick: current.options?.[selected],
+            correct: current.options?.[item.correctAnswerIndex!] ?? null,
+            isCorrect,
+            result,
+          },
+        ]);
       } else {
         const res = await apiPostJson<{
           result: ReviewResult;
@@ -174,7 +233,7 @@ export default function ReviewPage() {
         }>("/reviews", {
           studyItemId: current.id,
           selectedOptionIndex: selected,
-          responseTimeMs: observables.responseTimeMs,
+          responseTimeMs,
           answerChanges,
         });
         setFeedback({
@@ -182,11 +241,16 @@ export default function ReviewPage() {
           isCorrect: res.isCorrect,
           nextInDays: res.intervalDays,
         });
+        setResults((prev) => [
+          ...prev,
+          {
+            item: current,
+            pick: current.options?.[selected],
+            isCorrect: res.isCorrect,
+            result: res.result,
+          },
+        ]);
       }
-      setResults((prev) => [
-        ...prev,
-        { isCorrect: guest ? selected === getItem(current.id)?.correctAnswerIndex : undefined },
-      ]);
     } catch (e: any) {
       setError(e.message || "Failed to submit answer.");
     } finally {
@@ -195,7 +259,7 @@ export default function ReviewPage() {
   };
 
   const memorize = async () => {
-    if (!current || feedback) return;
+    if (!current || feedback || paused) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -208,17 +272,24 @@ export default function ReviewPage() {
           correctIndex: item.correctAnswerIndex,
           nextInDays: record.intervalDays,
         });
+        setResults((prev) => [
+          ...prev,
+          { item: current, result: "MEMORIZED", isCorrect: undefined },
+        ]);
       } else {
         const res = await apiPostJson<{ intervalDays: number }>(
           "/reviews/self-grade",
           {
             studyItemId: current.id,
-            responseTimeMs: Date.now() - questionStartRef.current,
+            responseTimeMs: clockRef.current.questionMs,
           },
         );
         setFeedback({ result: "MEMORIZED", nextInDays: res.intervalDays });
+        setResults((prev) => [
+          ...prev,
+          { item: current, result: "MEMORIZED" },
+        ]);
       }
-      setResults((prev) => [...prev, { isCorrect: undefined }]);
     } catch (e: any) {
       setError(e.message || "Failed to save.");
     } finally {
@@ -226,8 +297,31 @@ export default function ReviewPage() {
     }
   };
 
-  const next = () => {
-    setTotalElapsed((t) => t + Math.floor((Date.now() - questionStartRef.current) / 1000));
+  const gradeFlashcard = async (result: Exclude<ReviewResult, "EASY" | "GOOD" | "HARD">) => {
+    if (!current || feedback || paused) return;
+    if (!guest) {
+      // API only supports MEMORIZED self-grading
+      return memorize();
+    }
+    const item = getItem(current.id);
+    if (!item) {
+      setError("Item no longer exists.");
+      return;
+    }
+    const record = recordReview({ item, result });
+    setFeedback({ result, nextInDays: record.intervalDays });
+    setResults((prev) => [...prev, { item: current, result }]);
+  };
+
+  const skip = () => {
+    if (!current || feedback) return;
+    setResults((prev) => [...prev, { item: current, skipped: true }]);
+    advance();
+  };
+
+  const next = () => advance();
+
+  const advance = () => {
     if (index + 1 >= queue.length) {
       setPhase("summary");
       return;
@@ -235,17 +329,80 @@ export default function ReviewPage() {
     setIndex((i) => i + 1);
     setSelected(null);
     setAnswerChanges(0);
+    setRevealed(false);
     setFeedback(null);
-    questionStartRef.current = Date.now();
+    clockRef.current.questionMs = 0;
+    clockRef.current.last = Date.now();
   };
 
-  const correctCount = useMemo(
-    () => results.filter((r) => r.isCorrect === true).length,
-    [results],
-  );
-  const answeredCount = results.length;
+  /* --------------------------- Keyboard shortcuts --------------------------- */
 
-  /* ------------------------------- Screens ------------------------------- */
+  const keyHandler = useCallback(
+    (e: KeyboardEvent) => {
+      if (phase !== "session") return;
+
+      if (e.key === "Escape") {
+        setPaused((p) => !p);
+        return;
+      }
+
+      if (paused) return;
+
+      if (feedback) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          next();
+        }
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+      if (current?.kind === "MCQ") {
+        const letters = "abcd";
+        const letterIdx = letters.indexOf(key);
+        const numberIdx = /^[1-6]$/.test(key) ? Number(key) - 1 : -1;
+        const optionIdx = letterIdx >= 0 ? letterIdx : numberIdx;
+
+        if (optionIdx >= 0 && optionIdx < (current.options?.length ?? 0)) {
+          e.preventDefault();
+          choose(optionIdx);
+          return;
+        }
+        if (key === "enter" && selected !== null) {
+          e.preventDefault();
+          check();
+          return;
+        }
+      }
+      if (current?.kind === "CARD" && !revealed) {
+        if (key === "enter" || key === " ") {
+          e.preventDefault();
+          setRevealed(true);
+        }
+        return;
+      }
+      if (key === "m") {
+        e.preventDefault();
+        if (current?.kind === "MCQ") memorize();
+        else gradeFlashcard("MEMORIZED");
+      }
+      if (key === "a" && current?.kind === "CARD" && revealed && guest) {
+        gradeFlashcard("AGAIN");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [phase, paused, feedback, current, selected, revealed, guest, index, queue],
+  );
+
+  const handlerRef = useRef(keyHandler);
+  handlerRef.current = keyHandler;
+  useEffect(() => {
+    const listener = (e: KeyboardEvent) => handlerRef.current(e);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
+  /* -------------------------------- Screens -------------------------------- */
 
   if (phase === "loading") {
     return (
@@ -273,9 +430,7 @@ export default function ReviewPage() {
             All caught up!
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            {guest && results.length === 0
-              ? "No questions are due for revision right now."
-              : "Nothing else is due right now. Come back later."}
+            No questions, flashcards or notes are due right now.
           </p>
           <div className="mt-7 flex gap-2">
             <ButtonLink href="/dashboard" variant="outline">
@@ -283,7 +438,7 @@ export default function ReviewPage() {
             </ButtonLink>
             {guest && (
               <ButtonLink href="/dashboard" variant="secondary">
-                Add more questions
+                Add more items
               </ButtonLink>
             )}
           </div>
@@ -293,30 +448,78 @@ export default function ReviewPage() {
   }
 
   if (phase === "summary") {
+    const graded = results.filter((r) => !r.skipped);
+    const correctCount = results.filter((r) => r.isCorrect === true).length;
+    const missedCount = results.filter((r) => r.isCorrect === false).length;
+
     return (
       <AppShell>
-        <main className="mx-auto max-w-xl px-4 py-20 sm:px-6">
-          <Card className="p-8 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              Session complete
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {answeredCount} {answeredCount === 1 ? "question" : "questions"} reviewed
-            </p>
+        <main className="mx-auto max-w-2xl px-4 py-14 sm:px-6">
+          <Card className="p-8">
+            <div className="text-center">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                Session complete
+              </h1>
+              <p className="mt-1 text-sm text-slate-500">
+                {results.length} {results.length === 1 ? "card" : "cards"} ·{" "}
+                {formatTimer(Math.floor(clockRef.current.sessionMs / 1000))} spent
+              </p>
 
-            <div className="mt-6 grid grid-cols-3 gap-3 text-center">
-              <SummaryStat label="Correct" value={correctCount} tone="emerald" />
-              <SummaryStat
-                label="Missed"
-                value={results.filter((r) => r.isCorrect === false).length}
-                tone="rose"
-              />
-              <SummaryStat
-                label="Time"
-                value={formatTimer(totalElapsed)}
-                tone="slate"
-              />
+              <div className="mt-6 grid grid-cols-3 gap-3 text-center">
+                <SummaryStat label="Correct" value={correctCount} tone="emerald" />
+                <SummaryStat label="Missed" value={missedCount} tone="rose" />
+                <SummaryStat
+                  label="Graded"
+                  value={graded.length}
+                  tone="slate"
+                />
+              </div>
             </div>
+
+            {results.length > 0 && (
+              <ul className="mt-8 divide-y divide-slate-100 border-y border-slate-100">
+                {results.map((r, i) => (
+                  <li key={i} className="py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-800">
+                          {r.item.title || "Untitled"}
+                        </p>
+                        {r.item.kind === "MCQ" && r.pick && (
+                          <p
+                            className={cn(
+                              "mt-0.5 text-xs",
+                              r.isCorrect === false ? "text-red-500" : "text-slate-400",
+                            )}
+                          >
+                            Your answer: {r.pick}
+                            {r.isCorrect === false && r.correct && (
+                              <span className="text-emerald-600"> · Correct: {r.correct}</span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      {r.skipped ? (
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+                          Skipped
+                        </span>
+                      ) : (
+                        r.result && (
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
+                              RESULT_META[r.result].className,
+                            )}
+                          >
+                            {RESULT_META[r.result].label}
+                          </span>
+                        )
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {guest && (
               <Alert variant="info" className="mt-6 text-left">
@@ -345,22 +548,36 @@ export default function ReviewPage() {
 
   /* --------------------------- Session screen --------------------------- */
 
+  const mcq = current?.kind === "MCQ";
+
   return (
     <AppShell>
       <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
         {/* Progress header */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-900">
               {index + 1} / {queue.length}
             </span>
             <span className="text-xs text-slate-400">
-              · {correctCount} correct so far
+              · {mcq ? "Question" : "Card"}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <Timer className="size-4" />
-            {formatTimer(elapsed)}
+          <div className="flex items-center gap-3 text-sm text-slate-400">
+            <span className="inline-flex items-center gap-1.5" title="Session / current card">
+              <Timer className="size-4" />
+              {formatTimer(clockDisplay.session)}
+              <span className="text-slate-300">/</span>
+              {formatTimer(clockDisplay.question)}
+            </span>
+            <button
+              onClick={() => setPaused((p) => !p)}
+              className="rounded-lg p-1.5 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              aria-label={paused ? "Resume session" : "Pause session"}
+              title={paused ? "Resume (Esc)" : "Pause (Esc)"}
+            >
+              {paused ? <Play className="size-4" /> : <Pause className="size-4" />}
+            </button>
           </div>
         </div>
         <div className="mb-8 h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -377,121 +594,282 @@ export default function ReviewPage() {
         )}
 
         {current && (
-          <Card className="p-6 sm:p-8">
-            <h1 className="text-lg font-semibold leading-relaxed text-slate-900">
-              {current.title || "Untitled question"}
-            </h1>
+          <div className="relative">
+            <Card
+              className={cn(
+                "p-6 transition-filter sm:p-8",
+                paused && "pointer-events-none blur-sm",
+              )}
+            >
+              {/* Prompt */}
+              <h1 className="text-lg font-semibold leading-relaxed text-slate-900">
+                {current.title || "Untitled"}
+              </h1>
 
-            <div className="mt-6 flex flex-col gap-2.5">
-              {current.options.map((option, i) => {
-                const isSelected = selected === i;
-                const isCorrectOption = feedback?.correctIndex === i;
-                const isWrongPick =
-                  feedback && feedback.isCorrect === false && isSelected;
-
-                return (
-                  <button
-                    key={i}
-                    onClick={() => choose(i)}
-                    disabled={!!feedback || submitting}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors",
-                      feedback && isCorrectOption
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-900"
-                        : feedback && isWrongPick
-                          ? "border-red-300 bg-red-50 text-red-900"
-                          : isSelected
-                            ? "border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
-                      feedback && "cursor-default",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "flex size-7 shrink-0 items-center justify-center rounded-lg border text-xs font-semibold",
-                        feedback && isCorrectOption
-                          ? "border-emerald-500 bg-emerald-500 text-white"
-                          : feedback && isWrongPick
-                            ? "border-red-400 bg-red-400 text-white"
-                            : isSelected
-                              ? "border-brand-500 bg-brand-500 text-white"
-                              : "border-slate-300 text-slate-400",
-                      )}
-                    >
-                      {String.fromCharCode(65 + i)}
-                    </span>
-                    <span className="flex-1">{option}</span>
-                    {feedback && isCorrectOption && (
-                      <CircleCheck className="size-4 shrink-0 text-emerald-600" />
-                    )}
-                    {feedback && isWrongPick && (
-                      <CircleAlert className="size-4 shrink-0 text-red-500" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {feedback && (
-              <Alert
-                variant={
-                  feedback.result === "MEMORIZED"
-                    ? "success"
-                    : feedback.isCorrect === false
-                      ? "error"
-                      : "success"
-                }
-                className="mt-5"
-              >
-                {feedback.result === "MEMORIZED"
-                  ? "Marked as memorized — next review in "
-                  : feedback.isCorrect === false
-                    ? "Not quite — next review in "
-                    : "Correct — next review in "}
-                <strong>
-                  {feedback.nextInDays === 1 ? "1 day" : `${feedback.nextInDays} days`}
-                </strong>
-                .
-              </Alert>
-            )}
-
-            <div className="mt-7 flex items-center justify-between gap-3">
-              {!feedback ? (
+              {mcq ? (
                 <>
-                  <Button
-                    variant="ghost"
-                    onClick={memorize}
-                    loading={submitting}
-                    title="I already know this — schedule a long review"
-                  >
-                    Memorized
-                  </Button>
-                  <Button
-                    size="lg"
-                    onClick={check}
-                    disabled={selected === null}
-                    loading={submitting}
-                  >
-                    Check answer
-                    <ArrowRight className="size-4" />
-                  </Button>
+                  <div className="mt-6 flex flex-col gap-2.5">
+                    {current.options?.map((option, i) => {
+                      const isSelected = selected === i;
+                      const isCorrectOption = feedback?.correctIndex === i;
+                      const isWrongPick =
+                        feedback && feedback.isCorrect === false && isSelected;
+
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => choose(i)}
+                          disabled={!!feedback || submitting}
+                          className={cn(
+                            "flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors",
+                            feedback && isCorrectOption
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                              : feedback && isWrongPick
+                                ? "border-red-300 bg-red-50 text-red-900"
+                                : isSelected
+                                  ? "border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-500"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                            feedback && "cursor-default",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex size-7 shrink-0 items-center justify-center rounded-lg border text-xs font-semibold",
+                              feedback && isCorrectOption
+                                ? "border-emerald-500 bg-emerald-500 text-white"
+                                : feedback && isWrongPick
+                                  ? "border-red-400 bg-red-400 text-white"
+                                  : isSelected
+                                    ? "border-brand-500 bg-brand-500 text-white"
+                                    : "border-slate-300 text-slate-400",
+                            )}
+                          >
+                            {String.fromCharCode(65 + i)}
+                          </span>
+                          <span className="flex-1">{option}</span>
+                          {feedback && isCorrectOption && (
+                            <CircleCheck className="size-4 shrink-0 text-emerald-600" />
+                          )}
+                          {feedback && isWrongPick && (
+                            <CircleAlert className="size-4 shrink-0 text-red-500" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {feedback && (
+                    <Alert
+                      variant={
+                        feedback.result === "MEMORIZED"
+                          ? "success"
+                          : feedback.isCorrect === false
+                            ? "error"
+                            : "success"
+                      }
+                      className="mt-5"
+                    >
+                      {feedback.result === "MEMORIZED"
+                        ? "Marked as memorized — next review in "
+                        : feedback.isCorrect === false
+                          ? "Not quite — next review in "
+                          : "Correct — next review in "}
+                      <strong>
+                        {feedback.nextInDays === 1
+                          ? "1 day"
+                          : `${feedback.nextInDays} days`}
+                      </strong>
+                      .
+                    </Alert>
+                  )}
+
+                  <div className="mt-7 flex items-center justify-between gap-3">
+                    {!feedback ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          onClick={memorize}
+                          loading={submitting}
+                          title="I already know this — schedule a long review (M)"
+                        >
+                          Memorized
+                        </Button>
+                        <Button
+                          size="lg"
+                          onClick={check}
+                          disabled={selected === null}
+                          loading={submitting}
+                          title="Check answer (Enter)"
+                        >
+                          Check answer
+                          <ArrowRight className="size-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <NextRow guest={guest} isLast={index + 1 >= queue.length} onNext={next} />
+                    )}
+                  </div>
+                </>
+              ) : current?.content ? (
+                /* Flashcard with answer */
+                <>
+                  {revealed ? (
+                    <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-brand-600">
+                        Answer
+                      </p>
+                      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+                        {current.content}
+                      </p>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="mt-6 w-full"
+                      size="lg"
+                      onClick={() => setRevealed(true)}
+                      title="Reveal answer (Enter)"
+                    >
+                      Reveal answer
+                    </Button>
+                  )}
+
+                  {feedback && (
+                    <Alert
+                      variant={feedback.result === "AGAIN" ? "error" : "success"}
+                      className="mt-5"
+                    >
+                      {feedback.result === "AGAIN"
+                        ? "Scheduled for another look — next review in "
+                        : "Marked as memorized — next review in "}
+                      <strong>
+                        {feedback.nextInDays === 1
+                          ? "1 day"
+                          : `${feedback.nextInDays} days`}
+                      </strong>
+                      .
+                    </Alert>
+                  )}
+
+                  <div className="mt-7 flex items-center justify-between gap-3">
+                    {!feedback ? (
+                      revealed ? (
+                        <>
+                          {guest && (
+                            <Button
+                              variant="outline"
+                              onClick={() => gradeFlashcard("AGAIN")}
+                              title="Show it to me again soon (A)"
+                            >
+                              Again
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => gradeFlashcard("MEMORIZED")}
+                            loading={submitting}
+                            title="I remembered it (M)"
+                          >
+                            Got it
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-400">
+                          Try to recall it before revealing.
+                        </span>
+                      )
+                    ) : (
+                      <NextRow guest={guest} isLast={index + 1 >= queue.length} onNext={next} />
+                    )}
+                  </div>
                 </>
               ) : (
+                /* Prompt-only card (note / authed non-MCQ) */
                 <>
-                  <span className="text-xs text-slate-400">
-                    {guest ? "Saved on this device" : "Saved to your account"}
-                  </span>
-                  <Button size="lg" onClick={next}>
-                    {index + 1 >= queue.length ? "Finish" : "Next question"}
-                    <ArrowRight className="size-4" />
-                  </Button>
+                  <p className="mt-3 text-xs text-slate-400">
+                    Read it through and check if you still remember the details.
+                  </p>
+
+                  {feedback && (
+                    <Alert variant="success" className="mt-5">
+                      Marked as memorized — next review in{" "}
+                      <strong>
+                        {feedback.nextInDays === 1
+                          ? "1 day"
+                          : `${feedback.nextInDays} days`}
+                      </strong>
+                      .
+                    </Alert>
+                  )}
+
+                  <div className="mt-7 flex items-center justify-between gap-3">
+                    {!feedback ? (
+                      <>
+                        <Button variant="ghost" onClick={skip}>
+                          Skip
+                        </Button>
+                        <Button
+                          onClick={memorize}
+                          loading={submitting}
+                          title="Mark as memorized (M)"
+                        >
+                          Memorized
+                        </Button>
+                      </>
+                    ) : (
+                      <NextRow guest={guest} isLast={index + 1 >= queue.length} onNext={next} />
+                    )}
+                  </div>
                 </>
               )}
-            </div>
-          </Card>
+            </Card>
+
+            {paused && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Card className="flex flex-col items-center px-10 py-8">
+                  <Pause className="size-8 text-brand-600" />
+                  <p className="mt-3 font-semibold text-slate-900">Paused</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    The clock is stopped.
+                  </p>
+                  <Button className="mt-5" onClick={() => setPaused(false)}>
+                    <Play className="size-4" />
+                    Resume
+                  </Button>
+                </Card>
+              </div>
+            )}
+          </div>
         )}
+
+        {/* Shortcut hints */}
+        <p className="mt-5 text-center text-xs text-slate-400">
+          {mcq ? "A–D or 1–6 pick · Enter checks" : "Enter reveals · M memorizes"}
+          {" · "}Esc pauses
+        </p>
       </main>
     </AppShell>
+  );
+}
+
+function NextRow({
+  guest,
+  isLast,
+  onNext,
+}: {
+  guest: boolean;
+  isLast: boolean;
+  onNext: () => void;
+}) {
+  return (
+    <>
+      <span className="text-xs text-slate-400">
+        {guest ? "Saved on this device" : "Saved to your account"}
+      </span>
+      <Button size="lg" onClick={onNext} title="Next (Enter)">
+        {isLast ? "Finish" : "Next card"}
+        <ArrowRight className="size-4" />
+      </Button>
+    </>
   );
 }
 
