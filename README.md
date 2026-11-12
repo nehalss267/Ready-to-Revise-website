@@ -52,8 +52,8 @@ The easiest way to run the entire stack locally:
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/nehalss267/Ready-To-Revise--Revision-Scheduler-App.git
-cd Ready-To-Revise--Revision-Scheduler-App
+git clone https://github.com/nehalss267/Ready-to-Revise-website.git
+cd Ready-to-Revise-website
 ```
 
 ### 2. Configure environment variables
@@ -307,4 +307,4 @@ This project is for educational purposes.
 
 ## Support
 
-For issues or questions, please open an issue on the [GitHub repository](https://github.com/nehalss267/Ready-To-Revise--Revision-Scheduler-App/issues).
+For issues or questions, please open an issue on the [GitHub repository](https://github.com/nehalss267/Ready-to-Revise-website/issues).
