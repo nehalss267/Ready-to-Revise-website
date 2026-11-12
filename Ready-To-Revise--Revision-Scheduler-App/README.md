@@ -2,8 +2,15 @@
 
 Ready-To-Revise is an intelligent study companion that helps you remember what you learn using behavior-driven spaced repetition. Upload study materials (PDFs, DOCX, or images), get AI-generated MCQs, and revise them with a smart scheduler that adapts based on how you actually perform — not just self-reported ratings.
 
+## 🌐 Live Website
+
+**[https://revision-scheduler-app.onrender.com](https://revision-scheduler-app.onrender.com)**
+
+No signup required to try it — the web app works in guest mode out of the box. Create a free account whenever you want to sync your items across devices.
+
 ## Features
 
+- **🌐 Web App**: Next.js web client with the full revision flow — upload documents for AI questions, run revision sessions, and track progress with an analytics dashboard (works with or without an account: guest mode stores everything on your device and migrates your data when you sign up)
 - **📄 Smart Material Ingestion**: Upload PDFs, `.docx`, PNG/JPG images; Gemini extracts and analyzes content to generate questions automatically
 - **🧠 AI-Generated Questions**: Get high-quality multiple-choice questions tailored to your study materials
 - **⏰ Behavior-Driven Spaced Repetition**: Scheduler derives confidence from correctness + passive telemetry (time spent, interactions) — no manual difficulty ratings
@@ -15,10 +22,11 @@ Ready-To-Revise is an intelligent study companion that helps you remember what y
 
 ## Architecture
 
-This is a full-stack monorepo with three main components:
+This is a full-stack monorepo with four main components:
 
 | Component | Tech Stack | Purpose |
 |-----------|------------|---------|
+| **[Web App](./web)** | Next.js 16, React 19, Tailwind CSS v4 | Web client: landing page, auth, dashboard, revision sessions, guest mode |
 | **[Backend](./backend/README.md)** | NestJS 11, TypeScript, Prisma, PostgreSQL | REST API (`/api/v1`), auth, document processing, spaced repetition logic, ML integration |
 | **[Android App](./android/README.md)** | Kotlin, Jetpack Compose, Retrofit, WorkManager | Mobile client for studying on the go |
 | **[ML Service](./machine_learning/README.md)** | FastAPI, Python, scikit-learn/pandas | Recall prediction model training and inference |
@@ -155,6 +163,60 @@ echo "BACKEND_URL=http://10.0.2.2:3000/" >> local.properties  # For emulator
 
 Open in Android Studio for the best development experience.
 
+### Web App (Next.js)
+
+```bash
+cd web
+
+# Install dependencies
+npm ci
+
+# Configure environment
+cp .env.example .env.local
+# Point it at your backend API (default works with local backend):
+# NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+
+# Start development server
+npm run dev
+```
+
+Web app will be available at `http://localhost:3001`. Production build: `npm run build && npm start` (also port 3001).
+
+> The web app needs the backend running (or set `NEXT_PUBLIC_API_URL` to a deployed backend). Guest mode works fully offline with no backend at all.
+
+## Using the Web App
+
+### Without an account (Guest mode)
+1. Open the site and click **Try as guest** — no signup needed
+2. On the dashboard, click **Add item** to create questions (MCQ with 2–6 options), notes, or flashcards
+3. Click **Start revision** to run a revision session:
+   - MCQs: pick an answer and **Check answer** — a per-question timer feeds the confidence model
+   - Flashcards: try to recall, then **Reveal answer** and grade yourself (**Again** / **Got it**)
+   - Notes/other cards: read through and mark **Memorized** or **Skip**
+   - Keyboard shortcuts: **A–D / 1–6** pick an option, **Enter** check/reveal/next, **M** memorize, **Esc** pause
+   - The session clock can be paused any time (Esc)
+4. The session summary lists every card with your answer, the correct answer, and its grade
+5. Your progress, streak, and schedule are stored in your browser (localStorage) — the same spaced-repetition rules as the backend apply
+6. Note: AI document upload requires an account (it runs on the server) — see below
+
+### With an account
+1. Click **Sign up** (email + password) — your guest items are automatically imported into your account
+2. Use the **Upload** page to send PDF/DOCX/image study material; AI analyzes it (title, summary, subject, keywords) and generates MCQs from it
+3. Log in anytime; your schedule syncs across devices
+4. Password reset via email OTP is available from the login screen
+
+### Analytics
+The **Analytics** page shows reviews per day, accuracy, current/longest streaks, today's completion rate, a per-subject breakdown, your 10 most recent reviews, and a GitHub-style activity heatmap for the past year. Toggle between 7-day and 30-day ranges. In guest mode it works on local data; when signed in it reads from the analytics API.
+
+### Settings
+The **Settings** page manages your account and data: change your password (signed-in users), export your local guest data as JSON, or clear everything stored in the browser. Guest items not yet imported are carried into your account on the next login.
+
+### How scheduling works (both modes)
+- Wrong answers → review again in **1 day**
+- Correct answers → interval grows from **3 / 7 / 14 days** depending on how fast and confidently you answer
+- Correct intervals expand **1.2×–2.6×** per review, capped at 365 days
+- **Memorized** items get the GOOD interval × 1.5
+
 ## How It Works
 
 ### Spaced Repetition Logic
@@ -166,11 +228,11 @@ The app uses behavior-driven scheduling:
 - **First revision**: Generated questions get +24h stamp on creation
 
 ### Upload & Processing Pipeline
-1. User uploads PDF/DOCX/image via Android app
+1. User uploads PDF/DOCX/image via the web app (Upload page) or Android app
 2. Backend stores file (local or S3) and creates `Document` record
 3. AI analyzes content using Gemini
 4. Questions are generated and persisted as `StudyItem`s
-5. Android polls for processing status via WorkManager
+5. Web generates questions on demand from the Upload page; Android polls for processing status via WorkManager
 
 ### Revision Flow
 1. App fetches recommendations from `GET /api/v1/recommendations` (ML-powered, falls back to scheduler)
@@ -198,6 +260,11 @@ Key endpoints:
 ## Testing
 
 ```bash
+# Web client
+cd web
+npm run typecheck   # TypeScript
+npm run build       # Production build
+
 # Backend
 cd backend
 npm test           # Unit tests
@@ -213,7 +280,8 @@ pytest
 
 ## Deployment
 
-- **Backend**: Ready for deployment on [Render](https://render.com/) (see `render.yaml`). Uses Brevo for emails on Render.
+- **Web App**: Live at [https://revision-scheduler-app.onrender.com](https://revision-scheduler-app.onrender.com) — deployed on [Render](https://render.com/) (see `web/render.yaml`; set `NEXT_PUBLIC_API_URL` to your backend URL)
+- **Backend**: Ready for deployment on [Render](https://render.com/) (see root `render.yaml`, reference-only — deploy via the Render dashboard). Uses Brevo for emails on Render.
 - **ML Service**: Can be deployed separately (see `machine_learning/render.yaml`)
 - **Android**: Build release APK/AAB with `./gradlew assembleRelease` / `bundleRelease`
 
