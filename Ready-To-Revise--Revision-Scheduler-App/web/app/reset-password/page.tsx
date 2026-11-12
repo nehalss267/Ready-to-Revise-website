@@ -39,66 +39,94 @@ export default function ResetPasswordPage() {
     }
   };
 
+  const inputClass =
+    "w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm shadow-sm placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-brand transition-colors";
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-deep via-brand-deep to-brand-light p-4">
-      <div className="max-w-md w-full bg-white dark:bg-surface rounded-3xl p-8 shadow-deep">
-        <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Reset password</h2>
-        <form onSubmit={e => { e.preventDefault(); handleReset(); }} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-foreground">Email address</label>
-            <input
-              type="email"
-              placeholder="Email address"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full rounded-md border border-border px-3 py-2 text-sm shadow-sm placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-foreground">OTP (6-digit code)</label>
-            <input
-              type="number"
-              placeholder="OTP"
-              value={otp}
-              onChange={e => setOtp(e.target.value)}
-              required
-              className="w-full rounded-md border border-border px-3 py-2 text-sm shadow-sm placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-foreground">New password</label>
-            <input
-              type="password"
-              placeholder="New password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              required
-              className="w-full rounded-md border border-border px-3 py-2 text-sm shadow-sm placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1 text-foreground">Confirm new password</label>
-            <input
-              type="password"
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={e => setConfirmPassword(e.target.value)}
-              required
-              className="w-full rounded-md border border-border px-3 py-2 text-sm shadow-sm placeholder-muted/60 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-brand px-4 py-2 text-lg font-medium text-white hover:bg-brand-dark active:bg-brand-deep shadow-sm transition-colors"
-          >
-            {loading ? "Updating…" : "Reset password"}
-          </button>
-        </form>
-        <p className="mt-4 text-sm text-center text-muted">
-          Don't have a reset code? <a href="/forgot-password" className="underline hover:underline-offset-2 font-medium">Request a new one</a>
-        </p>
+    <div className="relative min-h-screen flex flex-col bg-gradient-to-br from-brand-deep via-brand-deep to-brand-light p-4">
+      <div className="absolute inset-0 bg-grid opacity-30" aria-hidden />
+      <header className="relative max-w-6xl w-full mx-auto pt-4 flex items-center justify-between">
+        <a href="/" className="flex items-center gap-2">
+          <span className="h-8 w-8 rounded-lg brand-gradient flex items-center justify-center text-white text-sm font-bold">R</span>
+          <span className="font-bold text-white">Ready-To-Revise</span>
+        </a>
+        <a href="/" className="text-sm text-white/75 hover:text-white transition-colors">Back to home</a>
+      </header>
+
+      <div className="relative flex-1 flex items-center justify-center py-12">
+        <div className="animate-pop w-full max-w-md rounded-3xl border border-border bg-surface shadow-soft p-8">
+          <h1 className="text-2xl font-bold text-center text-foreground">Reset password</h1>
+          <p className="text-sm text-muted text-center mt-1.5 mb-7">
+            Enter the 6-digit code we emailed you and choose a new password.
+          </p>
+          <form onSubmit={e => { e.preventDefault(); handleReset(); }} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium mb-1.5 text-foreground">Email address</label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
+                autoFocus
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="otp" className="block text-sm font-medium mb-1.5 text-foreground">Reset code</label>
+              <input
+                id="otp"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="123456"
+                autoComplete="one-time-code"
+                value={otp}
+                onChange={e => setOtp(e.target.value)}
+                required
+                className={`${inputClass} tracking-[0.4em] font-mono text-center`}
+              />
+            </div>
+            <div>
+              <label htmlFor="newPassword" className="block text-sm font-medium mb-1.5 text-foreground">New password</label>
+              <input
+                id="newPassword"
+                type="password"
+                placeholder="New password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                required
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1.5 text-foreground">Confirm new password</label>
+              <input
+                id="confirmPassword"
+                type="password"
+                placeholder="Repeat new password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                required
+                className={inputClass}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl bg-brand px-4 py-3 font-medium text-white shadow-sm transition-colors hover:bg-brand-dark active:bg-brand-deep disabled:opacity-60"
+            >
+              {loading ? "Updating…" : "Reset password"}
+            </button>
+          </form>
+          <p className="mt-5 text-sm text-center text-muted">
+            Don't have a reset code? <a href="/forgot-password" className="text-brand font-medium hover:text-brand-dark">Request a new one</a>
+          </p>
+        </div>
       </div>
     </div>
   );
